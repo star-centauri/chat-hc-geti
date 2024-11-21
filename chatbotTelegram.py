@@ -8,18 +8,21 @@ import dictionary_response as dic
 CHAVE_API = "7766028423:AAH7SCXbgT6UynPCNerhIbCigX-eIMBzW9g"
 bot = telebot.TeleBot(CHAVE_API)
 
-## Configuracoes do banco
-DB_PATH = "db_alunos.json"
+## Configuracoes dos bancos e pastas
+DB_HORAS = "db_horas_alunos.json"
+DB_SOLICITACAO = "db_solicitacao_alunos.json"
 PDF_FOLDER = "pdfs"
 
 # Garantir que a pasta exista
 os.makedirs(PDF_FOLDER, exist_ok=True)
 
 # Inicializar o banco de dados
-db = TinyDB(DB_PATH)
+db_horas = TinyDB(DB_HORAS)
+db_solicitacao = TinyDB(DB_SOLICITACAO)
 
 # Armazenamento temporario para o fluxo da opcao1
 user_data = {}
+solicitacao_data = {}
 
 ### BEGIN INSERIR HORAS ALUNO ###
 @bot.message_handler(commands=["opcao1"])
@@ -59,7 +62,94 @@ def handler_dre(msg):
         KeyboardButton("Intercâmbio")
     )
     bot.send_message(chat_id, "Selecione o tipo de atividade: ", reply_markup=markup)
+
+def check_write_type(msg):
+    return user_data.get(msg.chat.id, {}).get('step') == 'waiting_type'
+
+@bot.message_handler(func=check_write_type)
+def handler_type(msg):
+    chat_id = msg.chat.id
+    type = msg.text
+    user_data[chat_id]['type'] = type
+    user_data[chat_id]['step'] = 'waiting_pdf'
+    bot.send_message(chat_id, "Por favor, envie o PDF que comprove a atividade.")
+
+def check_write_pdf(msg):
+    return user_data.get(msg.chat.id, {}).get('step') == 'waiting_pdf'
+
+@bot.message_handler(content_types=['document'], func=check_write_pdf)
+def handler_pdf(msg):
+    chat_id = msg.chat.id
+    document = msg.document
+
+    if document.mime_type != 'application/pdf':
+        bot.send_message(chat_id, "O arquivo enviado não é um PDF. Por favor, envie um PDF válido.")
+        return
+    
+    # Salvar o arquivo na pasta
+    dre = user_data[chat_id]['dre']
+    type = user_data[chat_id]['type']
+    file_info = bot.get_file(document.file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+    file_name = f"{dre}_{type}_{chat_id}.pdf"
+    file_path = os.path.join(PDF_FOLDER, file_name)
+    with open(file_path, "wb") as f:
+        f.write(downloaded_file)
+
+    # Salvar os dados no TinyDB
+    db_horas.insert({
+        'chat_id': chat_id,
+        'dre': user_data[chat_id]['dre'],
+        'atividade': user_data[chat_id]['type'],
+        'pdf_caminho': file_path
+    })
+
+    # Finalizar o fluxo
+    bot.send_message(chat_id, "Obrigado! Seus dados foram recebidos com sucesso. Caso deseje voltar ao menu digite novamente.")
+    del user_data[chat_id]
 ### END INSERIR HORAS ALUNO ###
+
+### BEGIN SOLICITACAO INCLUSAO HORAS ###
+@bot.message_handler(commands=["opcao2"])
+def opcao2(msg):
+    chat_id = msg.chat.id
+    solicitacao_data[chat_id] = {'step': 'waiting_dre'}
+    bot.send_message(chat_id, dic.opcao1_solicitar_dre)
+
+def check_write_dre_sol(msg):
+    return solicitacao_data.get(msg.chat.id, {}).get('step') == 'waiting_dre'
+
+@bot.message_handler(func=check_write_dre_sol)
+def handler_dre_sol(msg):
+    chat_id = msg.chat.id
+    dre = msg.text
+    solicitacao_data[chat_id]['dre'] = dre
+    solicitacao_data[chat_id]['step'] = 'waiting_name'
+    bot.send_message(chat_id, "Informe seu nome completo: ")
+
+def check_write_name(msg):
+    return solicitacao_data.get(msg.chat.id, {}).get('step') == 'waiting_name'
+
+@bot.message_handler(func=check_write_name)
+def handler_name_sol(msg):
+    chat_id = msg.chat.id
+    name = msg.text
+    solicitacao_data[chat_id]['name'] = name
+    solicitacao_data[chat_id]['step'] = 'waiting_email'
+    bot.send_message(chat_id, "Informe seu nome email institucional (@dcc): ")
+
+def check_write_email(msg):
+    return solicitacao_data.get(msg.chat.id, {}).get('step') == 'waiting_email'
+
+@bot.message_handler(func=check_write_email)
+def handler_email_sol(msg):
+    chat_id = msg.chat.id
+    email = msg.text
+    solicitacao_data[chat_id]['email'] = email
+    solicitacao_data[chat_id]['step'] = 'waiting_form'
+
+    bot.send_message(chat_id, "Por favor, envie o formulário da inclusão assinado.")
+### BEGIN SOLICITACAO INCLUSAO HORAS ###
 
 def check(msg):
     return True
