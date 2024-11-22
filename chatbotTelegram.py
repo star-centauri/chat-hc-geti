@@ -1,20 +1,32 @@
 import os
+import glob
 import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
-from tinydb import TinyDB, Query
+from tinydb import TinyDB
+from dotenv import load_dotenv
+
 import dictionary_response as dic
+from send_email import send_email_with_attachment
+
+# Carregar variáveis de ambiente
+load_dotenv()
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")  # Token do Bot
 
 ## t.me/ufrj_comissao_hc_bot
-CHAVE_API = "7766028423:AAH7SCXbgT6UynPCNerhIbCigX-eIMBzW9g"
-bot = telebot.TeleBot(CHAVE_API)
+bot = telebot.TeleBot(TELEGRAM_TOKEN)
 
 ## Configuracoes dos bancos e pastas
 DB_HORAS = "db_horas_alunos.json"
 DB_SOLICITACAO = "db_solicitacao_alunos.json"
+
+## Configuracoes das pastas
 PDF_FOLDER = "pdfs"
+FORM_FOLDER = "forms"
 
 # Garantir que a pasta exista
 os.makedirs(PDF_FOLDER, exist_ok=True)
+os.makedirs(FORM_FOLDER, exist_ok=True)
 
 # Inicializar o banco de dados
 db_horas = TinyDB(DB_HORAS)
@@ -148,7 +160,51 @@ def handler_email_sol(msg):
     solicitacao_data[chat_id]['email'] = email
     solicitacao_data[chat_id]['step'] = 'waiting_form'
 
-    bot.send_message(chat_id, "Por favor, envie o formulário da inclusão assinado.")
+    bot.send_message(chat_id, "Por favor, envie o formulário preenchido e assinado.")
+
+def check_write_form(msg):
+    return solicitacao_data.get(msg.chat.id, {}).get('step') == 'waiting_form'
+
+@bot.message_handler(content_types=['document'], func=check_write_form)
+def handler_form_sol(msg):
+    chat_id = msg.chat.id
+    document = msg.document
+
+    ## Salvar arquivo
+    dre = solicitacao_data[chat_id]['dre']
+    name = solicitacao_data[chat_id]['name']
+    email = solicitacao_data[chat_id]['email']
+    file_info = bot.get_file(document.file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+    file_name = f"{dre}_{document.file_name}"
+    file_path = os.path.join(PDF_FOLDER, file_name)
+    with open(file_path, "wb") as f:
+        f.write(downloaded_file)
+
+    bot.send_message(chat_id, "Obrigado! Estamos enviando seus dados para comissão. Ao finalizar avisamos!")
+
+    # Pegar os comprovantes do aluno
+    padrao = os.path.join(PDF_FOLDER, f'{dre}_*.pdf') 
+    # Lista todos os arquivos que correspondem ao padrão 
+    arquivos_comprovante = glob.glob(padrao)
+    
+    success = send_email_with_attachment(file_path, arquivos_comprovante, name, dre, email)
+    if(success):
+        db_solicitacao.insert({
+            'chat_id': chat_id,
+            'dre': solicitacao_data[chat_id]['dre'],
+            'name': solicitacao_data[chat_id]['name'],
+            'email': solicitacao_data[chat_id]['email'],
+            'pdf_caminho': file_path,
+            'status': 'ANDAMENTO'
+        })
+        bot.send_message(chat_id, "Solicitação enviada com sucesso para a comissão. ")
+    else:
+        bot.send_message(chat_id, "Não foi possível enviar o seu formulário. Tenten novamente.")
+        os.remove(file_path)
+
+    del solicitacao_data[chat_id]
+
 ### BEGIN SOLICITACAO INCLUSAO HORAS ###
 
 def check(msg):
