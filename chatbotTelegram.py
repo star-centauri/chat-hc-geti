@@ -1,17 +1,25 @@
 import os
 import glob
 import telebot
+from enum import Enum
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
-from tinydb import TinyDB
+from tinydb import TinyDB, Query
 from dotenv import load_dotenv
 
 import dictionary_response as dic
 from send_email import send_email_with_attachment
 
+# Status da solicitacao
+class Status(Enum):
+    ANDAMENTO = 1
+    APROVADO = 2
+    REPROVADO = 3
+
 # Carregar variáveis de ambiente
 load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")  # Token do Bot
+KEY_ACCESS = os.getenv("KEY_ACCESS") # Token da comissão
 
 ## t.me/ufrj_comissao_hc_bot
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
@@ -31,10 +39,12 @@ os.makedirs(FORM_FOLDER, exist_ok=True)
 # Inicializar o banco de dados
 db_horas = TinyDB(DB_HORAS)
 db_solicitacao = TinyDB(DB_SOLICITACAO)
+query = Query()
 
 # Armazenamento temporario para o fluxo da opcao1
 user_data = {}
 solicitacao_data = {}
+comissao_data = {}
 
 ### BEGIN INSERIR HORAS ALUNO ###
 @bot.message_handler(commands=["opcao1"])
@@ -135,6 +145,12 @@ def check_write_dre_sol(msg):
 def handler_dre_sol(msg):
     chat_id = msg.chat.id
     dre = msg.text
+    solicitacao = db_solicitacao.search(query.dre == dre)
+
+    if len(solicitacao) > 0:
+        bot.send_message(chat_id, dic.existe_solicitacao)
+        return
+
     solicitacao_data[chat_id]['dre'] = dre
     solicitacao_data[chat_id]['step'] = 'waiting_name'
     bot.send_message(chat_id, "Informe seu nome completo: ")
@@ -196,7 +212,8 @@ def handler_form_sol(msg):
             'name': solicitacao_data[chat_id]['name'],
             'email': solicitacao_data[chat_id]['email'],
             'pdf_caminho': file_path,
-            'status': 'ANDAMENTO'
+            'status': Status.ANDAMENTO,
+            'observation': ''
         })
         bot.send_message(chat_id, "Solicitação enviada com sucesso para a comissão. ")
     else:
@@ -204,8 +221,111 @@ def handler_form_sol(msg):
         os.remove(file_path)
 
     del solicitacao_data[chat_id]
+### END SOLICITACAO INCLUSAO HORAS ###
 
-### BEGIN SOLICITACAO INCLUSAO HORAS ###
+### BEGIN VER ANDAMENTO ###
+@bot.message_handler(commands=["opcao3"])
+def opcao3(msg):
+    chat_id = msg.chat.id
+    solicitacao_data[chat_id] = {'step': 'andamento_dre'}
+    bot.send_message(chat_id, dic.opcao1_solicitar_dre)
+
+def check_write_andamento(msg):
+    return solicitacao_data.get(msg.chat.id, {}).get('step') == 'andamento_dre'
+
+@bot.message_handler(func=check_write_andamento)
+def handler_dre_sol(msg):
+    chat_id = msg.chat.id
+    dre = msg.text
+    aluno = db_solicitacao.search(query.dre == dre)
+    if len(aluno) <= 0:
+        bot.send_message(chat_id, dic.sem_solicitacao)
+
+    name_status = Status(aluno.status).name
+    text = f'Nome: {aluno.name} \n DRE: {aluno.dre} \n Situação: {name_status} \n Observação: {aluno.observation}'
+    bot.send_message(chat_id, text)
+### END VER ANDAMENTO ###
+
+### BEGIN COMISSAO ACESSO ###
+@bot.message_handler(commands=["comissao"])
+def acesso_comissao(msg):
+    chat_id = msg.chat.id
+    comissao_data[chat_id] = {'step': 'waiting_key_access'}
+    bot.reply_to(msg, "Por favor, informe a chave de acesso: ")
+
+def check_write_access(msg):
+    return comissao_data.get(msg.chat.id, {}).get('step') == 'waiting_key_access'
+
+@bot.message_handler(func=check_write_access)
+def handler_acesso_comissao(msg):
+    chat_id = msg.chat.id
+    key_access = msg.text
+
+    if key_access != KEY_ACCESS:
+        bot.send_message(chat_id, dic.acesso_negado)
+        return
+    
+    comissao_data[chat_id]['step'] = 'access_success'
+    bot.send_message(chat_id, dic.opcoes_comissao)
+
+def check_pendente(msg):
+    chat_id = msg.chat.id
+    is_access = comissao_data.get(chat_id, {}).get('step') == 'access_success'
+    
+    if(is_access == False):
+        bot.send_message(chat_id, dic.acesso_negado)
+    
+    return is_access
+
+@bot.message_handler(commands=['pendentes'], func=check_pendente)
+def handler_pendente(msg):
+    chat_id = msg.chat.id
+    pendentes = db_solicitacao.search(query.status == Status.ANDAMENTO)
+    lista = "" 
+    for aluno in pendentes: 
+        lista += f"Nome: {aluno['name']}, DRE: {aluno['dre']}\n"
+    bot.send_message(chat_id, lista)
+
+@bot.message_handler(commands=['aprovar_aluno'], func=check_pendente)
+def handler_aprovar(msg):
+    chat_id = msg.chat.id
+    dre = msg.text
+    db_solicitacao.update({'status': Status.APROVADO}, query.dre == dre)
+    bot.send_message(chat_id, dic.aluno_aprovado)
+
+@bot.message_handler(commands=['reprovar_aluno'], func=check_pendente)
+def handler_reprovado(msg):
+    chat_id = msg.chat.id
+    dre = msg.text
+    db_solicitacao.update({'status': Status.REPROVADO}, query.dre == dre)
+    comissao_data[chat_id]['is_reprovado'] = True
+    comissao_data[chat_id]['dre'] = dre
+    bot.send_message(chat_id, dic.aluno_reprovado_obs)
+
+def check_write_obs(msg):
+    chat_id = msg.chat.id
+    is_access = comissao_data.get(chat_id, {}).get('step') == 'access_success'
+    is_obs = comissao_data.get(chat_id, {}).get('is_reprovado') == True
+    
+    if(is_access == False and is_obs is None):
+        bot.send_message(chat_id, dic.acesso_negado)
+    
+    return is_access
+
+@bot.message_handler(func=check_write_obs)
+def handler_reprovacao_obs(msg):
+    chat_id = msg.chat.id
+    obs = msg.text
+    dre = comissao_data[chat_id]['dre']
+    db_solicitacao.update({'observation': obs}, query.dre == dre)
+    bot.send_message(chat_id, dic.aluno_reprovado)
+
+@bot.message_handler(commands=['sair_acesso'], func=check_pendente)
+def handler_sair(msg):
+    chat_id = msg.chat.id
+    bot.send_message(chat_id, dic.comissao_sair)
+    del comissao_data[chat_id]
+### END COMISSAO ACESSO ###
 
 def check(msg):
     return True
