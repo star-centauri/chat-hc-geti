@@ -5,6 +5,7 @@ Escolha uma das opções para continuar (clique ou digite o comando):
 /opcao1 - Inserir sua hora complementar.
 /opcao2 - Solicitar inclusão das horas.
 /opcao3 - Verificar andamento da solicitação.
+/opcao4 - Listar atividades.
 '''
 
 opcao1_solicitar_dre = '''
@@ -34,3 +35,5 @@ aluno_reprovado_obs = 'Observação obrigatória, informe o motivo: '
 comissao_sair = 'Até a próxima!'
 
 sem_solicitacao = 'Não possui solicitação de horas complementares no seu DRE. Crie a solicitação.'
+
+no_registered_activities = 'Sem atividades cadastradas.'

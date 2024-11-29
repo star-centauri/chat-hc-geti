@@ -27,6 +27,7 @@ Para alunos temos as seguintes opções:
 - /opcao1 = gravar os comprovantes de atividades e as atividades desenvolvidas dos alunos.
 - /opcao2 = aluno solicita a inclusão das horas no boletim. Ao finalizar o bot envia os dados para o email da comissão [o email no .env]
 - /opcao3 = aluno analisa o andamento da sua solicitação
+- /opcao4 = Lista as atividades que foram cadastradas no chatbot
 
 ## Opções Comissão:
 Para a comissão consiga ter acesso aos dados de atividades dos alunos ele precisa digitar "/comissao" e passar o token de acesso [no .env]. Quando o acesso for aprovado terá as opções:

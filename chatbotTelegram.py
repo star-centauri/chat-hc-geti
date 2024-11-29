@@ -149,6 +149,7 @@ def handler_dre_sol(msg):
 
     if len(solicitacao) > 0:
         bot.send_message(chat_id, dic.existe_solicitacao)
+        del solicitacao_data[chat_id]
         return
 
     solicitacao_data[chat_id]['dre'] = dre
@@ -208,11 +209,11 @@ def handler_form_sol(msg):
     if(success):
         db_solicitacao.insert({
             'chat_id': chat_id,
-            'dre': solicitacao_data[chat_id]['dre'],
-            'name': solicitacao_data[chat_id]['name'],
-            'email': solicitacao_data[chat_id]['email'],
+            'dre': dre,
+            'name': name,
+            'email': email,
             'pdf_caminho': file_path,
-            'status': Status.ANDAMENTO,
+            'status': Status.ANDAMENTO.value,
             'observation': ''
         })
         bot.send_message(chat_id, "Solicitação enviada com sucesso para a comissão. ")
@@ -237,14 +238,41 @@ def check_write_andamento(msg):
 def handler_dre_sol(msg):
     chat_id = msg.chat.id
     dre = msg.text
-    aluno = db_solicitacao.search(query.dre == dre)
-    if len(aluno) <= 0:
+    alunos = db_solicitacao.search(query.dre == dre)
+    if len(alunos) <= 0:
         bot.send_message(chat_id, dic.sem_solicitacao)
 
-    name_status = Status(aluno.status).name
-    text = f'Nome: {aluno.name} \n DRE: {aluno.dre} \n Situação: {name_status} \n Observação: {aluno.observation}'
-    bot.send_message(chat_id, text)
+    aluno = alunos[0]
+    name_status = Status(aluno['status']).name
+    text = f'*Nome*: {aluno['name']} \n *DRE*: {aluno['dre']} \n *Situação*: {name_status} \n *Observação*: {aluno['observation']}'
+    bot.send_message(chat_id, text, parse_mode="Markdown")
 ### END VER ANDAMENTO ###
+
+### BEGIN LISTAR ATIVIDADES ###
+@bot.message_handler(commands=["opcao4"])
+def opcao4(msg):
+    chat_id = msg.chat.id
+    user_data[chat_id] = {'step': 'listing_activity'}
+    bot.send_message(chat_id, dic.opcao1_solicitar_dre)
+
+def check_listing_activity(msg):
+    return user_data.get(msg.chat.id, {}).get('step') == 'listing_activity'
+
+@bot.message_handler(func=check_listing_activity)
+def handler_dre_activity(msg):
+    chat_id = msg.chat.id
+    dre = msg.text
+    activity = db_horas.search(query.dre == dre)
+
+    if len(activity) <= 0:
+        bot.send_message(chat_id, dic.no_registered_activities)
+        return
+    
+    lista = "Listagem: \n" 
+    for item in activity: 
+        lista += f"- *Atividade:* {item['atividade']}, *Comprovante:* {item['pdf_caminho']}\n"
+    bot.send_message(chat_id, lista, parse_mode="Markdown")
+### END LISTAR ATIVIDADES ###
 
 ### BEGIN COMISSAO ACESSO ###
 @bot.message_handler(commands=["comissao"])
@@ -280,27 +308,61 @@ def check_pendente(msg):
 @bot.message_handler(commands=['pendentes'], func=check_pendente)
 def handler_pendente(msg):
     chat_id = msg.chat.id
-    pendentes = db_solicitacao.search(query.status == Status.ANDAMENTO)
-    lista = "" 
+    pendentes = db_solicitacao.search(query.status == Status.ANDAMENTO.value)
+    lista = "Listagem: \n" 
     for aluno in pendentes: 
-        lista += f"Nome: {aluno['name']}, DRE: {aluno['dre']}\n"
-    bot.send_message(chat_id, lista)
+        lista += f"- *Nome*: {aluno['name']}, *DRE*: {aluno['dre']}\n"
+    bot.send_message(chat_id, lista, parse_mode="Markdown")
 
 @bot.message_handler(commands=['aprovar_aluno'], func=check_pendente)
 def handler_aprovar(msg):
     chat_id = msg.chat.id
+    bot.send_message(chat_id, dic.opcao1_solicitar_dre)
+    comissao_data[chat_id]['step2'] = 'comissao_dre_aprovar'
+
+def check_dre_aprover(msg):
+    chat_id = msg.chat.id
+    is_access = comissao_data.get(chat_id, {}).get('step') == 'access_success'
+    is_aprover = comissao_data.get(chat_id, {}).get('step2') == 'comissao_dre_aprovar'
+    
+    if(is_access == False or is_aprover == False):
+        bot.send_message(chat_id, dic.acesso_negado)
+    
+    return is_access
+
+@bot.message_handler(func=check_dre_aprover)    
+def handler_aprovar_dre(msg):  
+    chat_id = msg.chat.id  
     dre = msg.text
-    db_solicitacao.update({'status': Status.APROVADO}, query.dre == dre)
+    db_solicitacao.update({'status': Status.APROVADO.value}, query.dre == dre)
     bot.send_message(chat_id, dic.aluno_aprovado)
+    del comissao_data[chat_id]
 
 @bot.message_handler(commands=['reprovar_aluno'], func=check_pendente)
 def handler_reprovado(msg):
     chat_id = msg.chat.id
+    bot.send_message(chat_id, dic.opcao1_solicitar_dre)
+    comissao_data[chat_id]['step2'] = 'comissao_dre_reprover'
+
+def check_dre_reprover(msg):
+    chat_id = msg.chat.id
+    is_access = comissao_data.get(chat_id, {}).get('step') == 'access_success'
+    is_reprover = comissao_data.get(chat_id, {}).get('step2') == 'comissao_dre_reprover'
+    
+    if(is_access == False or is_reprover == False):
+        bot.send_message(chat_id, dic.acesso_negado)
+    
+    return is_access
+
+@bot.message_handler(func=check_dre_reprover)   
+def handler_reprovar_dre(msg): 
+    chat_id = msg.chat.id
     dre = msg.text
-    db_solicitacao.update({'status': Status.REPROVADO}, query.dre == dre)
+    db_solicitacao.update({'status': Status.REPROVADO.value}, query.dre == dre)
     comissao_data[chat_id]['is_reprovado'] = True
     comissao_data[chat_id]['dre'] = dre
     bot.send_message(chat_id, dic.aluno_reprovado_obs)
+    del comissao_data[chat_id]
 
 def check_write_obs(msg):
     chat_id = msg.chat.id
