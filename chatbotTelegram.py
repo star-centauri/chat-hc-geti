@@ -8,6 +8,10 @@ from dotenv import load_dotenv
 
 import dictionary_response as dic
 from send_email import send_email_with_attachment
+from keep_alive import keep_alive
+
+# Inicializar o servidor Flask antes do bot começar
+keep_alive()
 
 # Status da solicitacao
 class Status(Enum):
@@ -325,10 +329,7 @@ def check_dre_aprover(msg):
     is_access = comissao_data.get(chat_id, {}).get('step') == 'access_success'
     is_aprover = comissao_data.get(chat_id, {}).get('step2') == 'comissao_dre_aprovar'
     
-    if(is_access == False or is_aprover == False):
-        bot.send_message(chat_id, dic.acesso_negado)
-    
-    return is_access
+    return is_access and is_aprover
 
 @bot.message_handler(func=check_dre_aprover)    
 def handler_aprovar_dre(msg):  
@@ -349,10 +350,7 @@ def check_dre_reprover(msg):
     is_access = comissao_data.get(chat_id, {}).get('step') == 'access_success'
     is_reprover = comissao_data.get(chat_id, {}).get('step2') == 'comissao_dre_reprover'
     
-    if(is_access == False or is_reprover == False):
-        bot.send_message(chat_id, dic.acesso_negado)
-    
-    return is_access
+    return is_access and is_reprover
 
 @bot.message_handler(func=check_dre_reprover)   
 def handler_reprovar_dre(msg): 
