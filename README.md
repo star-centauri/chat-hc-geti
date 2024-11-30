@@ -7,7 +7,6 @@ Criação de um chatbox para orientar alunos e comissão nas horas complementare
 - python 3.12.4
 - pip [já vem quando você baixa o python]
 - TinyDB
-- dotenv
 - pyTelegramBotAPI
 - pyjwt
 
