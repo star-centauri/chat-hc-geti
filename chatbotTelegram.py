@@ -243,7 +243,7 @@ def handler_dre_sol(msg):
 
     aluno = alunos[0]
     name_status = Status(aluno['status']).name
-    text = f'*Nome*: {aluno['name']} \n *DRE*: {aluno['dre']} \n *Situação*: {name_status} \n *Observação*: {aluno['observation']}'
+    text = f"*Nome*: {aluno['name']} \n *DRE*: {aluno['dre']} \n *Situação*: {name_status} \n *Observação*: {aluno['observation']}"
     bot.send_message(chat_id, text, parse_mode="Markdown")
 ### END VER ANDAMENTO ###
 
