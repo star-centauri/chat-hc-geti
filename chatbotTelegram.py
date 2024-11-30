@@ -4,14 +4,9 @@ import telebot
 from enum import Enum
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from tinydb import TinyDB, Query
-from dotenv import load_dotenv
 
 import dictionary_response as dic
 from send_email import send_email_with_attachment
-from keep_alive import keep_alive
-
-# Inicializar o servidor Flask antes do bot começar
-keep_alive()
 
 # Status da solicitacao
 class Status(Enum):
