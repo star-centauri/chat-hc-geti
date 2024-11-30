@@ -4,10 +4,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-from dotenv import load_dotenv
-
-# Carregar variáveis de ambiente
-load_dotenv()
 
 EMAIL_HOST = os.getenv("EMAIL_HOST")          # Servidor SMTP (ex.: smtp.gmail.com)
 EMAIL_PORT = int(os.getenv("EMAIL_PORT"))     # Porta do servidor SMTP (ex.: 587)
