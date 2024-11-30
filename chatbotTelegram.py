@@ -1,6 +1,8 @@
 import os
 import glob
 import telebot
+import datetime
+import jwt
 from enum import Enum
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from tinydb import TinyDB, Query
@@ -16,6 +18,7 @@ class Status(Enum):
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")  # Token do Bot
 KEY_ACCESS = os.getenv("KEY_ACCESS") # Token da comissão
+SECRETKEYTOKEN = os.getenv("SECRETKEY_TOKEN")  # Token do Bot
 
 ## t.me/ufrj_comissao_hc_bot
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
@@ -206,8 +209,10 @@ def handler_form_sol(msg):
     
     success = send_email_with_attachment(file_path, arquivos_comprovante, name, dre, email)
     if(success):
+        token = generateToken(solicitacao_data, chat_id)
         db_solicitacao.insert({
             'chat_id': chat_id,
+            'token': token,
             'dre': dre,
             'name': name,
             'email': email,
@@ -227,27 +232,27 @@ def handler_form_sol(msg):
 @bot.message_handler(commands=["opcao3"])
 def opcao3(msg):
     chat_id = msg.chat.id
-    solicitacao_data[chat_id] = {'step': 'andamento_dre'}
-    bot.send_message(chat_id, dic.opcao1_solicitar_dre)
-
-def check_write_andamento(msg):
-    return solicitacao_data.get(msg.chat.id, {}).get('step') == 'andamento_dre'
-
-@bot.message_handler(func=check_write_andamento)
-def handler_dre_sol(msg):
+    solicitacao_data[chat_id] = {'step': 'waiting_token'}
+    bot.send_message(chat_id, dic.opcao3_solicitar_token)
+    
+def check_write_token_sol(msg):
+    return solicitacao_data.get(msg.chat.id, {}).get('step') == 'waiting_token'
+    
+@bot.message_handler(func=check_write_token_sol)
+def handler_token_sol(msg):
     chat_id = msg.chat.id
-    dre = msg.text
-    alunos = db_solicitacao.search(query.dre == dre)
-
-    if len(alunos) <= 0:
-        bot.send_message(chat_id, dic.sem_solicitacao)
+    token = msg.text
+    
+    results = db_solicitacao.search(Query().token == token)  
+    if(results):
+        result = results[0]
+        name_status = Status(result['status']).name
+        text = f"*Nome*: {result['name']} \n *DRE*: {result['dre']} \n *Situação*: {name_status} \n *Observação*: {result['observation']}"
+        bot.send_message(chat_id, text, parse_mode="Markdown")
+    else:
+        bot.send_message(chat_id, "Não foi possível encontrar sua solicitação. Tente novamente.")
         del solicitacao_data[chat_id]
-        return
 
-    aluno = alunos[0]
-    name_status = Status(aluno['status']).name
-    text = f"*Nome*: {aluno['name']} \n *DRE*: {aluno['dre']} \n *Situação*: {name_status} \n *Observação*: {aluno['observation']}"
-    bot.send_message(chat_id, text, parse_mode="Markdown")
 ### END VER ANDAMENTO ###
 
 ### BEGIN LISTAR ATIVIDADES ###
@@ -384,6 +389,30 @@ def handler_sair(msg):
     bot.send_message(chat_id, dic.comissao_sair)
     del comissao_data[chat_id]
 ### END COMISSAO ACESSO ###
+
+### Generate Token ###
+
+def generateToken(solicitacao_data, chat_id):
+    dre = solicitacao_data[chat_id]['dre']
+    name = solicitacao_data[chat_id]['name']
+    email = solicitacao_data[chat_id]['email']
+    
+    date = datetime.datetime.now()
+    date_string = date.strftime('%Y-%m-%d %H:%M:%S')
+    payload = {
+    'dre': dre,                  # ID do usuário
+    'name': name,          # Nome do usuário
+    'email': email,                 # Função do usuário (exemplo)
+    'data': date_string          # Data formatada como string
+}
+    #dev purposes only :)
+    secret_key = SECRETKEYTOKEN
+
+    token = jwt.encode(payload, secret_key, algorithm='HS256')
+    
+    return token
+
+### End Generate Token ###
 
 def check(msg):
     return True
