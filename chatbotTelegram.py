@@ -273,6 +273,7 @@ def handler_dre_activity(msg):
 
     if len(activity) <= 0:
         bot.send_message(chat_id, dic.no_registered_activities)
+        del user_data[chat_id]
         return
     
     lista = "Listagem: \n" 
@@ -298,6 +299,7 @@ def handler_acesso_comissao(msg):
 
     if key_access != KEY_ACCESS:
         bot.send_message(chat_id, dic.acesso_negado)
+        del comissao_data[chat_id]
         return
     
     comissao_data[chat_id]['step'] = 'access_success'
@@ -306,10 +308,6 @@ def handler_acesso_comissao(msg):
 def check_pendente(msg):
     chat_id = msg.chat.id
     is_access = comissao_data.get(chat_id, {}).get('step') == 'access_success'
-    
-    if(is_access == False):
-        bot.send_message(chat_id, dic.acesso_negado)
-    
     return is_access
 
 @bot.message_handler(commands=['pendentes'], func=check_pendente)
@@ -317,8 +315,10 @@ def handler_pendente(msg):
     chat_id = msg.chat.id
     pendentes = db_solicitacao.search(query.status == Status.ANDAMENTO.value)
     lista = "Listagem: \n" 
+
     for aluno in pendentes: 
         lista += f"- *Nome*: {aluno['name']}, *DRE*: {aluno['dre']}\n"
+    
     bot.send_message(chat_id, lista, parse_mode="Markdown")
 
 @bot.message_handler(commands=['aprovar_aluno'], func=check_pendente)
