@@ -1,6 +1,7 @@
 import os
 import glob
 import telebot
+import datetime
 import jwt
 from enum import Enum
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
@@ -17,6 +18,7 @@ class Status(Enum):
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")  # Token do Bot
 KEY_ACCESS = os.getenv("KEY_ACCESS") # Token da comissão
+SECRETKEYTOKEN = os.getenv("SECRETKEY_TOKEN")  # Token do Bot
 
 ## t.me/ufrj_comissao_hc_bot
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
@@ -404,7 +406,7 @@ def generateToken(solicitacao_data, chat_id):
     'data': date_string          # Data formatada como string
 }
     #dev purposes only :)
-    secret_key = 'l16heWJjmNeK1zQzLe8DDUyugDjNx1T3EnbliMY0sWA='
+    secret_key = SECRETKEYTOKEN
 
     token = jwt.encode(payload, secret_key, algorithm='HS256')
     
