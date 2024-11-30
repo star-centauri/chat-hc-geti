@@ -24,9 +24,10 @@ bot = telebot.TeleBot(TELEGRAM_TOKEN)
 DB_HORAS = "db_horas_alunos.json"
 DB_SOLICITACAO = "db_solicitacao_alunos.json"
 
-## Configuracoes das pastas
+## Configuracoes das pastas e arquivos
 PDF_FOLDER = "pdfs"
 FORM_FOLDER = "forms"
+FILE_SOLICITACAO = "FORMULARIO_SOLICITACAO_ATIVIDADES_COMPLEMENTARES.pdf"
 
 # Garantir que a pasta exista
 os.makedirs(PDF_FOLDER, exist_ok=True)
@@ -173,7 +174,8 @@ def handler_email_sol(msg):
     solicitacao_data[chat_id]['email'] = email
     solicitacao_data[chat_id]['step'] = 'waiting_form'
 
-    bot.send_message(chat_id, "Por favor, envie o formulário preenchido e assinado.")
+    bot.send_message(chat_id, "Por favor, Baixe e envie o formulário abaixo preenchido e assinado.")
+    bot.send_document(chat_id=chat_id, document=open(FILE_SOLICITACAO, 'rb'))
 
 def check_write_form(msg):
     return solicitacao_data.get(msg.chat.id, {}).get('step') == 'waiting_form'
@@ -187,10 +189,11 @@ def handler_form_sol(msg):
     dre = solicitacao_data[chat_id]['dre']
     name = solicitacao_data[chat_id]['name']
     email = solicitacao_data[chat_id]['email']
+    
     file_info = bot.get_file(document.file_id)
     downloaded_file = bot.download_file(file_info.file_path)
     file_name = f"{dre}_{document.file_name}"
-    file_path = os.path.join(PDF_FOLDER, file_name)
+    file_path = os.path.join(FORM_FOLDER, file_name)
     with open(file_path, "wb") as f:
         f.write(downloaded_file)
 
@@ -235,8 +238,11 @@ def handler_dre_sol(msg):
     chat_id = msg.chat.id
     dre = msg.text
     alunos = db_solicitacao.search(query.dre == dre)
+
     if len(alunos) <= 0:
         bot.send_message(chat_id, dic.sem_solicitacao)
+        del solicitacao_data[chat_id]
+        return
 
     aluno = alunos[0]
     name_status = Status(aluno['status']).name
