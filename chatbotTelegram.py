@@ -14,9 +14,6 @@ class Status(Enum):
     APROVADO = 2
     REPROVADO = 3
 
-# Carregar variáveis de ambiente
-load_dotenv()
-
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")  # Token do Bot
 KEY_ACCESS = os.getenv("KEY_ACCESS") # Token da comissão
 
